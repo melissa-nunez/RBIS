@@ -1,0 +1,99 @@
+---
+title: "Analysis of FDNY's Risk Based Inspection System by Council District: Results and Further Research"
+author: "Melissa Nunez"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    theme: cosmo
+---
+
+## Goal
+
+The fire department has a risk based inspection system that aims to identify buildings that are at risk for structural fires. We are looking at: 
+
+* inspection data before the RBI system 
+* inspection data after the RBI system
+* fire dispatch data
+
+in order to asses wether the RBI system is targeting the areas where the fires are actually happening.
+
+## Data
+
+* [Risk Based Inspection Data](https://data.cityofnewyork.us/Public-Safety/Risk-Based-Inspections-RBIS-/itd7-gx3g) 
+* [Bureau of Fire Prevention Inspections Data](https://data.cityofnewyork.us/Public-Safety/Bureau-of-Fire-Prevention-Inspections/ssq6-fkht/data) 
+* [Mandatory Inspections by Fire Companies](https://data.cityofnewyork.us/Public-Safety/Mandatory-Inspections-by-Fire-Companies/kfgh-h6re/data)
+* [Fire incident dispatch data](https://data.cityofnewyork.us/Public-Safety/Fire-Incident-Dispatch-Data/8m42-w767/data)
+* [PLUTO Data](https://www1.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page)
+
+## Notes
+
+* RBI data begins 01/01/2014 and ends 01/28/2019.
+* Fire dispatch data begins 01/01/2013 and ends 12/31/2018.
+* The intersection time period of 01/01/2014 to 12/31/2018 is used for better comparison.
+* Inspection data before RBI algorithm begins 01/01/2013 and ends 01/30/2018.
+* Fire dispatch data contains structural fires and non-structural (bushes, manholes, cars, etc) fires. Because RBI are building/residential inspections, only structural fire data is used from the fire dispatch data.
+* Data is analyzed on a council district level
+
+## Results
+### Normalized by Buildings
+
+##### Risk Based Inspections (RBI) Count per Council District Normalized by Number of Buildings
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/map1.html" width="100%" height="500" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+##### Fire Dispatch Count per Council District Normalized by Number of Buildings
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/map2.html" width="100%" height="500" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+
+##### Inspection Count per Council District Before RBI Normalized by Number of Buildings
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/map3.html" width="100%" height="500" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+##### Correlations
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/scatterwidg_bld.html" width="100%" height="600" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+
+### Normalized by Units
+
+##### Risk Based Inspections (RBI) Count per Council District Normalized by Number of Units
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/map4.html" width="100%" height="500" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+##### Fire Dispatch Count per Council District Normalized by Number of Units
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/map5.html" width="100%" height="500" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+
+##### Inspection Count per Council District Before RBI Normalized by Number of Units
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/map6.html" width="100%" height="500" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+##### Correlations
+<iframe src="https://newyorkcitycouncil.github.io/FDNY_RBI/Figures/scatterwidg_units.html" width="100%" height="600" id="igraph" scrolling="no" seamless="seamless" frameBorder="0"> </iframe>
+
+
+## Analysis We Can and Cannot Do (So Far)
+A buidling level analysis was considered where we investigate the association between number of RBIs and number of fires for each building. However, the fire dispatch data does not include a Building Identification Number (BIN) nor the building address. 
+
+### Identification Data that is Available
+Fire Dispatch Data:
+
+* Cross streets for the location of the alarm box - However, this cannot me matched to a specific building
+* <span style="background-color: #FFFF00">Borough</span>
+* Zipcode
+* <span style="background-color: #a6dff7">City Council District</span>
+* <span style="background-color: #f4a6f7">Community District District</span>
+* Congressional District
+
+RBI Data:
+
+* Building Identification Number (BIN)
+* <span style="background-color: #FFFF00">Borough</span>
+* Latitude/Longitude
+* <span style="background-color: #f4a6f7">Community District District</span>
+* <span style="background-color: #a6dff7">City Council District</span>
+* Building, Block, Lot Number (BBL)
+
+Inspections Before RBI:
+
+* <span style="background-color: #FFFF00">Borough</span>
+* Latitude/Longitude
+* <span style="background-color: #a6dff7">City Council District</span>
+* <span style="background-color: #f4a6f7">Community District District</span>
+* Building Identification Number (BIN)
+* Building, Block, Lot Number (BBL)

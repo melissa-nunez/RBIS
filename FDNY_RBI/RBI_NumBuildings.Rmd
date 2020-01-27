@@ -1,0 +1,266 @@
+---
+title: "Comparing Fire Inspections Before and After Risk Based Inspection Algorithm Normalized by Number of Buildings"
+author: "Melissa Nunez"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = FALSE, fig.align="left")
+```
+
+
+```{r Notes}
+# Notes: RBI Data has information for dates within 1853 days after first date. Fire dispatch data has information for dates within 2190 days after first date. So, I used 1853 days after the first date as a limit.
+
+# JK, I used the intersection. So that ^^ was my first idea, but it makes more sense to compare equivalent time periods so I used data between 01/01/2014 and 12/31/2018. This is 1825 days, which is only 28 days less than the first approach.
+
+# Residual: Observed - Predicted
+
+```
+
+Notes: RBI data begins 01/01/2014 and ends 01/28/2019. Fire dispatch data begins 01/01/2013 and ends 12/31/2018. The intersection time period of 01/01/2014 to 12/31/2018 is used for better comparison. Fire dispatch data contains structural fires and non-structural (bushes, manholes, cars, etc) fires. Because RBI are building/residential inspections, only structural fire data is used from the fire dispatch data. Inspection data before RBI algorithm begins 01/01/2013 and ends 01/30/2018. Number of buildings is used to normalize.
+
+```{r RBI Data, include = FALSE}
+library(leaflet)
+library(data.table)
+library(dplyr)
+library(htmlwidgets)
+library(htmltools)
+library(sf)
+library(ggplot2)
+library(ggpubr)
+library(tibble)
+library(ggpmisc)
+
+pluto.shp <- st_read("nyc_mappluto_19v1_shp/MapPLUTO.shp", layer="MapPLUTO")
+pluto.shp <- st_transform(pluto.shp, "+proj=longlat +datum=WGS84") # Changes coordinate system
+
+ccd <- st_read("CityCouncilDistricts/geo_export_204b61e4-ec2c-40a9-8d39-5f685ce0c611.shp")
+
+RBI.insp <- fread("Risk_Based_Inspections__RBIS_.csv")
+#head(RBI.insp)
+#sum(!complete.cases(RBI.insp)) # 6989 missing
+
+RBI.insp <- RBI.insp %>%
+  filter(!is.na(LATITUDE))
+
+RBI.insp$INSP_INSPECT_DT <- as.Date(RBI.insp$INSP_INSPECT_DT, format = "%m/%d/%Y")
+
+# summary(RBI.insp$INSP_INSPECT_DT) # Begins 01/01/2014 and Ends 01/28/2019
+# as.Date(strptime("2014-01-01", "%Y-%m-%d"))-as.Date(strptime("2019-01-28", "%Y-%m-%d"))
+
+RBI.insp.1853 <- RBI.insp %>% filter(INSP_INSPECT_DT <= as.Date(strptime("2018-12-31", "%Y-%m-%d")))
+
+RBI.insp_ccd <- RBI.insp.1853 %>% group_by(CITYCOUNCILDISTRICT) %>% tally() %>% rename(coun_dist=CITYCOUNCILDISTRICT)
+
+RBI.insp_ccd_geom <- RBI.insp_ccd %>% left_join(ccd)
+RBI.insp_ccd_sf <- RBI.insp_ccd_geom %>% st_as_sf() # Creates an sf object from a data frame with latitude and longitude coordinates
+RBI.insp_ccd_sf <- st_transform(RBI.insp_ccd_sf, '+proj=longlat +datum=WGS84')
+
+#join pluto lots to council districts that have RBIS info
+cd_sj <- st_join(RBI.insp_ccd_sf, pluto.shp %>% st_transform(st_crs(RBI.insp_ccd_sf)), st_intersects)
+
+RBI.insp.ccd.bldg <- cd_sj %>% select(coun_dist, n, NumBldgs) %>% data.frame() %>% group_by(coun_dist, n) %>% summarize(NumBldgs=sum(NumBldgs)) %>% mutate(norm.count = n/NumBldgs)
+
+RBI.insp.ccd.bldg_geom <- RBI.insp.ccd.bldg %>% left_join(ccd)
+RBI.insp.ccd.bldg_sf <- RBI.insp.ccd.bldg_geom %>% st_as_sf() 
+RBI.insp.ccd.bldg_sf <- st_transform(RBI.insp.ccd.bldg_sf, '+proj=longlat +datum=WGS84')
+
+pal = colorNumeric(
+  palette = "Reds",
+  domain = RBI.insp.ccd.bldg_sf$norm.count, 
+  na.color = "Grey", 
+  reverse = FALSE
+)
+
+map <- leaflet(data = RBI.insp.ccd.bldg_sf, options = leafletOptions(zoomControl = FALSE), height = 500, width =  500) %>% 
+  addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(weight = 1, 
+              fillColor = ~pal(norm.count), 
+              color = "white", 
+              stroke = TRUE, 
+              fillOpacity = .9) %>% 
+  addLegend(position ="topleft", 
+            pal = pal, 
+            values = RBI.insp.ccd.bldg_sf$norm.count, 
+            title = "RBIS")
+```
+
+
+
+
+```{r Fire Data, include = TRUE}
+fire.dispatch <- fread("Fire_Incident_Dispatch_Data.csv")
+
+#sum(!complete.cases(fire.dispatch$CITYCOUNCILDISTRICT)) # 194435 missing
+
+fire.dispatch <- fire.dispatch %>%
+  filter(!is.na(CITYCOUNCILDISTRICT))
+
+fire.dispatch$INCIDENT_DATETIME <- as.Date(fire.dispatch$INCIDENT_DATETIME, format = "%m/%d/%Y %H:%M:%S %p")
+
+# summary(fire.dispatch$INCIDENT_DATETIME) # Begins 01/01/2013 and Ends 12/31/2018
+# as.Date(strptime("2013-01-01", "%Y-%m-%d"))-as.Date(strptime("2018-12-31", "%Y-%m-%d")) #2190
+
+# as.Date(strptime("2014-01-01", "%Y-%m-%d"))-as.Date(strptime("2018-12-31", "%Y-%m-%d")) #1825
+
+#as.Date(strptime("2018-12-31", "%Y-%m-%d"))-1853 # 2013-12-04
+
+fire.dispatch.1853 <- fire.dispatch %>% filter(INCIDENT_DATETIME >= as.Date(strptime("2014-01-01", "%Y-%m-%d")))
+
+fire.dispatch.1853 <- fire.dispatch.1853 %>% filter(INCIDENT_CLASSIFICATION_GROUP == "Structural Fires")
+
+fire.dispatch.1853.ccd <- fire.dispatch.1853 %>% group_by(CITYCOUNCILDISTRICT) %>% tally() %>% rename(coun_dist=CITYCOUNCILDISTRICT)
+
+fire.dispatch.1853.ccd_geom <- fire.dispatch.1853.ccd %>% left_join(ccd)
+fire.dispatch.1853.ccd_sf <- fire.dispatch.1853.ccd_geom %>% st_as_sf() 
+fire.dispatch.1853.ccd_sf <- st_transform(fire.dispatch.1853.ccd_sf, '+proj=longlat +datum=WGS84')
+
+#join pluto lots to council districts that have RBIS info
+dispatch.cd_sj <- st_join(fire.dispatch.1853.ccd_sf, pluto.shp %>% st_transform(st_crs(fire.dispatch.1853.ccd_sf)), st_intersects)
+
+fire.dispatch.1853.ccd.bldg <- dispatch.cd_sj %>% select(coun_dist, n, NumBldgs) %>% data.frame() %>% group_by(coun_dist, n) %>% summarize(NumBldgs=sum(NumBldgs)) %>% mutate(norm.count = n/NumBldgs)
+
+fire.dispatch.1853.ccd.bldg_geom <- fire.dispatch.1853.ccd.bldg %>% left_join(ccd)
+fire.dispatch.1853.ccd.bldg_sf <- fire.dispatch.1853.ccd.bldg_geom %>% st_as_sf() 
+fire.dispatch.1853.ccd.bldg_sf <- st_transform(fire.dispatch.1853.ccd.bldg_sf, '+proj=longlat +datum=WGS84')
+
+pal2 = colorNumeric(
+  palette = "Reds",
+  domain = fire.dispatch.1853.ccd.bldg_sf$norm.count, 
+  na.color = "Grey", 
+  reverse = FALSE
+)
+
+map2 <- leaflet(data = fire.dispatch.1853.ccd.bldg_sf, options = leafletOptions(zoomControl = FALSE), height = 500, width =  500) %>% 
+  addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(weight = 1, 
+              fillColor = ~pal2(norm.count), 
+              color = "white", 
+              stroke = TRUE, 
+              fillOpacity = .9) %>% 
+  addLegend(position ="topleft", 
+            pal = pal2, 
+            values = fire.dispatch.1853.ccd.bldg_sf$norm.count, 
+            title = "Fires")
+```
+
+
+
+
+```{r inspections before rbi, include=FALSE}
+fr.inspec <- fread("Mandatory_Inspections_by_Fire_Companies.csv")
+fr.inspec$INSP_INSPECT_DT_FK <- as.Date(fr.inspec$INSP_INSPECT_DT_FK, format = "%m/%d/%Y")
+# summary(fr.inspec$INSP_INSPECT_DT) # Begins 01-01-2013 and Ends 01-30-2018
+
+fr.inspec <- fr.inspec %>% filter(INSP_INSPECT_DT_FK < as.Date(strptime("2014-01-01", "%Y-%m-%d")))
+
+fr.inspec <- fr.inspec %>% filter(!is.na(LATITUDE))
+fr.inspec.ccd <- fr.inspec %>% group_by(CITYCOUNCILDISTRICT) %>% tally() %>% rename(coun_dist=CITYCOUNCILDISTRICT)
+
+fr.inspec.ccd_geom <- fr.inspec.ccd %>% left_join(ccd)
+fr.inspec.ccd_sf <- fr.inspec.ccd_geom %>% st_as_sf() 
+fr.inspec.ccd_sf <- st_transform(fr.inspec.ccd_sf, '+proj=longlat +datum=WGS84')
+
+fr.inspec.cd_sj <- st_join(fr.inspec.ccd_sf, pluto.shp %>% st_transform(st_crs(fr.inspec.ccd_sf)), st_intersects)
+
+fr.inspec.ccd.bldg <- fr.inspec.cd_sj  %>% select(coun_dist, n, NumBldgs) %>% data.frame() %>% group_by(coun_dist, n) %>% summarize(NumBldgs=sum(NumBldgs)) %>% mutate(norm.count = n/NumBldgs)
+
+fr.inspec.ccd.bldg_geom <- fr.inspec.ccd.bldg %>% left_join(ccd)
+fr.inspec.ccd.bldg_sf <- fr.inspec.ccd.bldg_geom %>% st_as_sf() 
+fr.inspec.ccd.bldg_sf <- st_transform(fr.inspec.ccd.bldg_sf, '+proj=longlat +datum=WGS84')
+
+pal3 = colorNumeric(
+  palette = "Reds",
+  domain = fr.inspec.ccd.bldg_sf$norm.count, 
+  na.color = "Grey", 
+  reverse = FALSE
+)
+
+map3 <- leaflet(data = fr.inspec.ccd.bldg_sf, options = leafletOptions(zoomControl = FALSE), height = 500, width =  500) %>% 
+  addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(weight = 1, 
+              fillColor = ~pal3(norm.count), 
+              color = "white", 
+              stroke = TRUE, 
+              fillOpacity = .9) %>% 
+  addLegend(position ="topleft", 
+            pal = pal3, 
+            values = fr.inspec.ccd.bldg_sf$norm.count, 
+            title = "Inspections")
+```
+
+
+##### Risk Based Inspections (RBI) Count per Council District Normalized by Number of Buildings
+```{r map}
+map
+```
+
+##### Fire Dispatch Count per Council District Normalized by Number of Buildings
+```{r map2}
+map2
+```
+
+##### Inspection Count per Council District Before RBI Normalized by Number of Buildings
+```{r map3}
+map3
+```
+
+
+```{r linear regression and residual plot, include = FALSE}
+lm_dat <- RBI.insp.ccd.bldg %>% rename(norm.count.insp = norm.count) %>% merge(fire.dispatch.1853.ccd.bldg %>% rename(norm.count.fire=norm.count), by="coun_dist")
+
+lm_mod <- summary(lm(norm.count.fire ~ norm.count.insp, data = lm_dat))
+
+lm_plot <- ggplot(lm_dat, aes(x=norm.count.fire, y=norm.count.insp)) +
+  geom_point() +
+  geom_smooth(method='lm',formula=y~x, se = FALSE) + 
+  xlab("Fires") + ylab("Risk Based Inspections")
+
+res.dat <- data.frame(resid(lm_mod)) %>% rownames_to_column() %>% rename(residual = resid.lm_mod., coun_dist = rowname)
+res.dat$coun_dist <- as.numeric(res.dat$coun_dist)
+
+res.ccd_geom <- res.dat %>% left_join(ccd)
+res.ccd_sf <- res.ccd_geom %>% st_as_sf() 
+res.ccd_sf <- st_transform(res.ccd_sf, '+proj=longlat +datum=WGS84')
+
+pal4 = colorNumeric(
+  palette = "Purples",
+  domain = res.ccd_sf$residual, 
+  na.color = "Grey", 
+  reverse = FALSE
+)
+
+
+map4 <- leaflet(data = res.ccd_sf, options = leafletOptions(zoomControl = FALSE), height = 500, width =  500) %>% 
+  addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(weight = 1, 
+              fillColor = ~pal4(residual), 
+              color = "white", 
+              stroke = TRUE, 
+              fillOpacity = .9) %>% 
+  addLegend(position ="topleft", 
+            pal = pal4, 
+            values = res.ccd_sf$residual, 
+            title = "Residuals")
+```
+
+
+##### Scatter Plot and Correlation
+```{r Correlation}
+# Pearson Corr
+ggplot(lm_dat, aes(x=norm.count.fire, y=norm.count.insp)) +
+  geom_point() +  xlab("Fires") + ylab("Risk Based Inspections") + 
+  ggtitle("Plot of Fire Dispatches and RBI Inspections") + stat_cor(method = "pearson", label.x = 0.05, label.y = 1.10)
+```
+
+
+##### Risk Based Inspections Regressed on Fires
+Note: I prefer the correlation but this was asked for
+```{R Squared}
+# Adjusted R^2
+lm_plot + stat_poly_eq(formula = y~x, aes(label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) + 
+  ggtitle("Regression Model of Fires and RBI Inspections") 
+```
